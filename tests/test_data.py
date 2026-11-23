@@ -19,19 +19,23 @@ def test_infrastructure_filter_is_explicit():
 def test_infrastructure_filter_reports_unmatched_categories():
     with pytest.raises(ValueError): filter_infrastructure_complaints(pd.DataFrame({"complaint_type":["Noise"]}),["Street Condition"])
 
-def test_downloader_samples_multiple_offsets(tmp_path,monkeypatch):
+def test_downloader_samples_multiple_time_slices(tmp_path,monkeypatch):
     calls=[]
     class Response:
         def __init__(self,payload): self.payload=payload
         def raise_for_status(self): pass
         def json(self): return self.payload
+    counter={"id":0}
     def fake_get(url,**kwargs):
-        params=kwargs["params"]; calls.append(params)
-        if params["$select"]=="count(*) as n": return Response([{"n":"100"}])
-        offset=int(params["$offset"]); size=int(params["$limit"])
-        return Response([{"unique_key":str(i),"created_date":"2024-01-01","complaint_type":"Street Condition","latitude":"40.7","longitude":"-73.9"} for i in range(offset,offset+size)])
+        params=kwargs["params"]; calls.append(params); size=int(params["$limit"])
+        rows=[]
+        for _ in range(size):
+            counter["id"]+=1
+            rows.append({"unique_key":str(counter["id"]),"created_date":"2024-01-01","complaint_type":"Street Condition","latitude":"40.7","longitude":"-73.9"})
+        return Response(rows)
     monkeypatch.setattr("geopulse.data.nyc311.requests.get",fake_get)
     path=download_nyc311(tmp_path/"raw.csv",date(2024,1,1),date(2024,2,1),limit=6)
     assert len(pd.read_csv(path))==6
-    offsets=[int(c["$offset"]) for c in calls if "$offset" in c]
-    assert len(set(offsets))==3
+    assert len(calls)==3
+    assert len({c["$where"] for c in calls})==3
+    assert all("$offset" not in c for c in calls)

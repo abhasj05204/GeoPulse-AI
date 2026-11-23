@@ -5,38 +5,34 @@ from pathlib import Path
 import pandas as pd
 import requests
 REQUIRED={"created_date","complaint_type","latitude","longitude"}
-DEFAULT_INFRA_TYPES=["Street Condition","Street Light Condition","Sidewalk Condition","Sewer","Water System","Highway Condition"]
+DEFAULT_INFRA_TYPES=["Street Condition","Street Light Condition","Sidewalk Condition","Sewer","Water System","Highway Condition","Traffic Signal Condition","Water Leak"]
 
 def download_nyc311(output:str|Path,start:date,end:date,limit:int=100000)->Path:
-    """Download a bounded sample spread across complete calendar months in [start, end)."""
+    """Download a bounded sample spread across months and early/middle/late time slices."""
     if start>=end or limit<1: raise ValueError("Require start < end and a positive limit")
     base=os.getenv("NYC311_API_BASE","https://data.cityofnewyork.us").rstrip("/")
     dataset=os.getenv("NYC311_DATASET_ID","erm2-nwe9")
     headers={"X-App-Token":os.environ["SOCRATA_APP_TOKEN"]} if os.getenv("SOCRATA_APP_TOKEN") else {}
-    first=pd.Timestamp(start).replace(day=1)
-    last=pd.Timestamp(end-pd.Timedelta(days=1)).replace(day=1)
+    first=pd.Timestamp(start).replace(day=1); last=pd.Timestamp(end-pd.Timedelta(days=1)).replace(day=1)
     months=pd.date_range(first,last,freq="MS")
-    budget=max(1,math.ceil(limit/len(months))); rows=[]
-    for month in months:
-        month_start=max(start,month.date())
-        month_end=min(end,(month+pd.offsets.MonthBegin(1)).date())
+    budgets=[limit//len(months)+(1 if i<limit%len(months) else 0) for i in range(len(months))]
+    rows=[]
+    for month,budget in zip(months,budgets):
+        if budget==0: continue
+        month_start=max(start,month.date()); month_end=min(end,(month+pd.offsets.MonthBegin(1)).date())
         if month_start>=month_end: continue
-        where=f"created_date >= '{month_start}T00:00:00' AND created_date < '{month_end}T00:00:00' AND latitude IS NOT NULL AND longitude IS NOT NULL"
-        count_response=requests.get(f"{base}/resource/{dataset}.json",headers=headers,timeout=60,
-            params={"$select":"count(*) as n","$where":where,"$limit":1})
-        count_response.raise_for_status(); count=int(count_response.json()[0]["n"])
-        if count==0: continue
-        samples=min(3,budget,count); chunk=max(1,math.ceil(min(budget,count)/samples))
-        offsets=[0] if samples==1 else sorted({round(i*(count-chunk)/(samples-1)) for i in range(samples)})
-        for offset in offsets:
+        begin=pd.Timestamp(month_start); finish=pd.Timestamp(month_end); samples=min(3,budget); duration=finish-begin
+        for i in range(samples):
+            chunk=budget//samples+(1 if i<budget%samples else 0)
+            seg_start=begin+duration*i/samples; seg_end=begin+duration*(i+1)/samples
+            start_text=seg_start.strftime("%Y-%m-%dT%H:%M:%S"); end_text=seg_end.strftime("%Y-%m-%dT%H:%M:%S")
+            where=f"created_date >= '{start_text}' AND created_date < '{end_text}' AND latitude IS NOT NULL AND longitude IS NOT NULL"
             response=requests.get(f"{base}/resource/{dataset}.json",headers=headers,timeout=60,
-              params={"$select":"unique_key,created_date,complaint_type,latitude,longitude",
-                "$where":where,"$limit":chunk,"$offset":offset,"$order":"created_date ASC"})
+              params={"$select":"unique_key,created_date,complaint_type,latitude,longitude","$where":where,"$limit":chunk,"$order":"created_date ASC"})
             response.raise_for_status(); rows.extend(response.json())
     frame=pd.DataFrame(rows)
     if "unique_key" in frame: frame=frame.drop_duplicates("unique_key")
-    frame=frame.head(limit)
-    path=Path(output); path.parent.mkdir(parents=True,exist_ok=True)
+    frame=frame.head(limit); path=Path(output); path.parent.mkdir(parents=True,exist_ok=True)
     frame.to_csv(path,index=False); return path
 
 def validate_complaints(frame:pd.DataFrame)->pd.DataFrame:

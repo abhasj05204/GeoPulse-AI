@@ -2,13 +2,13 @@
 
 ## NYC 311 Service Requests from 2020 to Present
 
-Primary source: [NYC Open Data dataset erm2-nwe9](https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2010-to-Present/erm2-nwe9/data). The city describes it as a daily-updated set of service requests that can be directed to specific agencies. The source page currently lists 23.2 million rows and 44 columns; fields include unique key, created date, complaint type, latitude, and longitude. The city warns that expected values can change and category value lists are not exhaustive. Verify the live schema before each formal acquisition. [Dataset page](https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2010-to-Present/erm2-nwe9/data).
+Primary source: [NYC Open Data dataset erm2-nwe9](https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2010-to-Present/erm2-nwe9/data). The city describes it as a daily-updated set of service requests that can be directed to specific agencies. The source page currently lists 23.2 million rows and 44 columns; fields include unique key, created date, complaint type, latitude, and longitude. The city warns that expected values can change and category value lists are not exhaustive. Verify the live schema before each formal acquisition.
 
-The downloader samples across calendar months and within each month at early, middle, and late offsets so a bounded download is not restricted to the earliest records in the entire requested period. The download is still a sample, not a census. Record the query dates, requested limit, returned row count, and acquisition time.
+The downloader samples across calendar months and within each month at early, middle, and late time slices so a bounded download is not restricted to the earliest records in the entire requested period. The download is a sample, not a census. Record query dates, requested limit, returned row count, acquisition time, and source audit.
 
 ## Infrastructure cohort
 
-The default modelling cohort includes the source complaint types `Street Condition`, `Street Light Condition`, `Sidewalk Condition`, `Sewer`, `Water System`, and `Highway Condition`. These values are configurable through `GEOPULSE_INFRA_TYPES` or `--complaint-types`. Run `python scripts/inspect_data.py data/raw/nyc311.csv` first and verify the actual category values. If none match, training stops rather than silently using all 311 categories.
+The default modelling cohort includes `Street Condition`, `Street Light Condition`, `Sidewalk Condition`, `Sewer`, `Water System`, `Highway Condition`, `Traffic Signal Condition`, and `Water Leak`. These are exact source complaint-type labels matched case-insensitively. They are configurable through `GEOPULSE_INFRA_TYPES` or `--complaint-types`. Run `python scripts/inspect_data.py data/raw/nyc311.csv` first and verify actual category values. If none match, training stops rather than silently using all 311 categories.
 
 ## Data handling
 

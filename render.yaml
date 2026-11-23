@@ -21,14 +21,13 @@ services:
       - key: GEOPULSE_CELL_SIZE_M
         value: "1000"
       - key: GEOPULSE_INFRA_TYPES
-        value: "Street Condition,Street Light Condition,Sidewalk Condition,Sewer,Water System,Highway Condition"
+        value: "Street Condition,Street Light Condition,Sidewalk Condition,Sewer,Water System,Highway Condition,Traffic Signal Condition,Water Leak"
       - key: SOCRATA_APP_TOKEN
         sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
         value: gemini-3.8-flash
-
   - type: web
     name: geopulse-dashboard
     runtime: python
