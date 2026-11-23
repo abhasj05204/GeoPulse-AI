@@ -1,8 +1,8 @@
-"""Build cell/day rows with lagged predictors and future recurrence labels."""
+"""Build cell/day rows with leakage-safe temporal and local spatial features."""
 import numpy as np
 import pandas as pd
 from pyproj import Transformer
-FEATURES=["count_7d","count_30d","count_90d","mean_daily_30d","days_since_last","day_of_week","month","x_km","y_km"]
+FEATURES=["count_7d","count_30d","count_90d","mean_daily_30d","days_since_last","neighbor_count_30d","day_of_week","month","x_km","y_km"]
 
 def build_panel(complaints:pd.DataFrame,cell_size_m:int=500,horizon_days:int=30)->pd.DataFrame:
     if cell_size_m<=0 or horizon_days<=0: raise ValueError("Cell size and horizon must be positive")
@@ -29,6 +29,19 @@ def build_panel(complaints:pd.DataFrame,cell_size_m:int=500,horizon_days:int=30)
     last=panel.created_date.where(panel["count"].gt(0)).groupby([panel.cx,panel.cy]).ffill()
     last=last.groupby([panel.cx,panel.cy]).shift(1)
     panel["days_since_last"]=(panel.created_date-last).dt.days.fillna(999).clip(upper=999)
+    # Sum the prior-30-day counts in the eight immediately adjacent cells.
+    keys=panel[["cx","cy","created_date"]]
+    base=panel[["cx","cy","created_date","count_30d"]]
+    nearby=np.zeros(len(panel),dtype=float)
+    for dx in (-1,0,1):
+        for dy in (-1,0,1):
+            if dx==0 and dy==0: continue
+            neighbor=base.copy()
+            neighbor["cx"]=neighbor.cx-dx; neighbor["cy"]=neighbor.cy-dy
+            neighbor=neighbor.rename(columns={"count_30d":"neighbor_count"})
+            aligned=keys.merge(neighbor,on=["cx","cy","created_date"],how="left")["neighbor_count"].fillna(0)
+            nearby+=aligned.to_numpy()
+    panel["neighbor_count_30d"]=nearby
     panel["day_of_week"]=panel.created_date.dt.dayofweek; panel["month"]=panel.created_date.dt.month
     panel["x_km"]=(panel.cx+.5)*cell_size_m/1000; panel["y_km"]=(panel.cy+.5)*cell_size_m/1000
     future=panel.groupby(["cx","cy"],sort=False)["count"].transform(lambda s:s.shift(-1).iloc[::-1].rolling(horizon_days,min_periods=1).sum().iloc[::-1])

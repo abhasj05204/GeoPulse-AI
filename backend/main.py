@@ -1,14 +1,13 @@
-"""FastAPI service for inference, hotspot clustering, model reports, and grounded GenAI."""
+"""FastAPI service for inference, risk mapping, hotspots, and grounded GenAI."""
 import json
-from pathlib import Path
 from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel,Field
-from geopulse.config import FEATURE_COLUMNS,MODEL_PATH,ROOT
+from geopulse.config import MODEL_PATH,ROOT
 from geopulse.models.inference import RecurrencePredictor
 from geopulse.spatial.hotspots import detect_hotspots
 from geopulse.genai.analyst import summarize
 
-app=FastAPI(title="GeoPulse AI API",version="0.2.0",description="Geospatial complaint recurrence analytics")
+app=FastAPI(title="GeoPulse AI API",version="0.3.0",description="Geospatial complaint recurrence analytics")
 class PredictionRequest(BaseModel): features:dict[str,float]=Field(...)
 class HotspotRequest(BaseModel): points:list[dict]=Field(...,min_length=2,max_length=10000); eps_m:float=500; min_samples:int=10
 class AnalystRequest(BaseModel): question:str=Field(...,min_length=1,max_length=1000); evidence:dict=Field(...)
@@ -28,6 +27,31 @@ def explain():
     path=ROOT/"artifacts"/"feature_importance.json"
     if not path.exists(): raise HTTPException(503,"Feature importance report not found; train a model first")
     return json.loads(path.read_text(encoding="utf-8"))
+@app.get("/api/analytics/summary")
+def analytics_summary():
+    import pandas as pd
+    path=ROOT/"data"/"processed"/"cell_day_panel.csv"
+    if not path.exists(): raise HTTPException(503,"Processed panel not found; run the training pipeline first")
+    df=pd.read_csv(path)
+    return {"panel_rows":len(df),"spatial_cells":int(df[["cx","cy"]].drop_duplicates().shape[0]),
+      "date_start":str(df.created_date.min()),"date_end":str(df.created_date.max()),
+      "complaint_events":int(df["count"].sum())}
+@app.get("/api/risks")
+def latest_risks():
+    import pandas as pd
+    from pyproj import Transformer
+    path=ROOT/"data"/"processed"/"cell_day_panel.csv"
+    if not path.exists(): raise HTTPException(503,"Processed panel not found; run the training pipeline first")
+    if not MODEL_PATH.exists(): raise HTTPException(503,"Trained model artifact not found")
+    df=pd.read_csv(path); df["created_date"]=pd.to_datetime(df.created_date)
+    latest=df.sort_values("created_date").groupby(["cx","cy"],as_index=False).tail(1).copy()
+    try: predictions=RecurrencePredictor().predict(latest.to_dict(orient="records"))
+    except (ValueError,FileNotFoundError) as exc: raise HTTPException(422,str(exc)) from exc
+    tx=Transformer.from_crs("EPSG:32618","EPSG:4326",always_xy=True)
+    lon,lat=tx.transform(latest.x_km.to_numpy()*1000,latest.y_km.to_numpy()*1000)
+    return {"as_of":str(latest.created_date.max()),"cells":[
+      {"cx":int(row.cx),"cy":int(row.cy),"latitude":float(la),"longitude":float(lo),**pred}
+      for (_,row),la,lo,pred in zip(latest.iterrows(),lat,lon,predictions)]}
 @app.post("/api/predict")
 def predict(payload:PredictionRequest):
     try: return RecurrencePredictor().predict([payload.features])[0]
@@ -42,6 +66,7 @@ def hotspots(payload:HotspotRequest):
     except (ValueError,KeyError) as exc: raise HTTPException(422,str(exc)) from exc
 @app.post("/api/ai/summary")
 def ai_summary(payload:AnalystRequest):
+    if len(str(payload.evidence))>12000: raise HTTPException(413,"Evidence context exceeds 12,000 characters")
     try: return {"summary":summarize(payload.question,payload.evidence)}
     except RuntimeError as exc: raise HTTPException(503,str(exc)) from exc
     except ValueError as exc: raise HTTPException(422,str(exc)) from exc
