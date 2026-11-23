@@ -1,9 +1,11 @@
 from fastapi.testclient import TestClient
+import logging
 import pandas as pd
 import backend.main as api
 client=TestClient(api.app)
 
 def test_health(caplog):
+    caplog.set_level(logging.INFO,logger="geopulse.api")
     response=client.get("/api/health")
     assert response.status_code==200 and response.json()["status"]=="ok"
     assert any("request_complete" in record.message for record in caplog.records)
