@@ -1,7 +1,7 @@
 name: Real-data model smoke run
 on:
   push:
-    branches: [feature/data-smoke]
+    branches: [feature/data-sampling]
   workflow_dispatch:
 jobs:
   train:
