@@ -9,7 +9,7 @@ REQUIRED={"created_date","complaint_type","latitude","longitude"}
 DEFAULT_INFRA_TYPES=["Street Condition","Street Light Condition","Sidewalk Condition","Sewer","Water System","Highway Condition"]
 
 def download_nyc311(output:str|Path,start:date,end:date,limit:int=100000)->Path:
-    """Download a bounded, approximately month-stratified sample across the full date range."""
+    """Download a bounded sample spread across months and within each month."""
     if start>=end or limit<1: raise ValueError("Require start < end and a positive limit")
     base=os.getenv("NYC311_API_BASE","https://data.cityofnewyork.us").rstrip("/")
     dataset=os.getenv("NYC311_DATASET_ID","erm2-nwe9")
@@ -26,8 +26,9 @@ def download_nyc311(output:str|Path,start:date,end:date,limit:int=100000)->Path:
             params={"$select":"count(*) as n","$where":where,"$limit":1})
         count_response.raise_for_status(); count=int(count_response.json()[0]["n"])
         if count==0: continue
-        chunk=max(1,math.ceil(min(budget,count)/3))
-        offsets=sorted(set([0,max(0,(count-chunk)//2),max(0,count-chunk)]))
+        samples=min(3,budget,count); chunk=max(1,math.ceil(min(budget,count)/samples))
+        if samples==1: offsets=[0]
+        else: offsets=sorted({round(i*(count-chunk)/(samples-1)) for i in range(samples)})
         for offset in offsets:
             response=requests.get(f"{base}/resource/{dataset}.json",headers=headers,timeout=60,
               params={"$select":"unique_key,created_date,complaint_type,latitude,longitude",
