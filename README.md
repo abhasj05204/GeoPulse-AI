@@ -1,77 +1,73 @@
 # GeoPulse AI
 ### Predict. Prioritize. Prevent.
 
-GeoPulse AI is a geospatial machine-learning project for analysing recurring urban infrastructure complaints, identifying spatial hotspots, estimating short-term recurrence risk, and presenting evidence-grounded analytical explanations.
+GeoPulse AI is a focused geospatial machine-learning project for identifying spatial complaint hotspots, estimating 30-day complaint recurrence risk, exposing model outputs through FastAPI, and exploring results in a compact Streamlit dashboard.
 
-## Project scope
+## Strict project scope
 
-This repository contains only three product components:
+- **ML pipelines:** public complaint data ingestion, validation, projected spatial aggregation, leakage-aware temporal features, recurrence modelling, evaluation, and permutation-based explainability.
+- **Backend API:** FastAPI endpoints for inference, hotspot clustering, model reports, and optional evidence-grounded GenAI summaries.
+- **Analytical dashboard:** Streamlit interface for model metrics, feature importance, CSV-based hotspot exploration, predictions, and AI summaries.
 
-1. **Machine-learning pipelines** — reproducible data validation, geospatial feature engineering, hotspot analysis, recurrence modelling, evaluation, and explainability.
-2. **Backend API** — a lightweight FastAPI service exposing trained models and spatial analytics.
-3. **Analytical dashboard** — a focused Streamlit interface consuming the API and visualising real analytical outputs.
+No marketing site, authentication, profiles, subscriptions, or unrelated CRUD application is included. GenAI is an optional explanatory layer and does not replace the ML model.
 
-Generative AI is an explanatory layer grounded in computed project evidence. It does not replace the predictive model, autonomously operate systems, or provide official engineering diagnoses.
+## Architecture
 
-## Current implementation status
+See [architecture](docs/architecture.md), [methodology](docs/methodology.md), [dataset notes](docs/datasets.md), and [API reference](docs/api.md).
 
-The repository is being initialized. Model performance, supported datasets, and deployment URLs will be reported only after implementation and verification.
+## Local setup
 
-## Planned workflow
-
-Public civic complaint data → validation and cleaning → spatial aggregation and temporal feature engineering → hotspot analysis and recurrence model → evaluation and SHAP explanations → FastAPI → Streamlit dashboard.
-
-The prediction target is intended to estimate whether a spatial cell will receive one or more new qualifying complaints in a defined future window. Features must be computed strictly from information available at prediction time. Chronological evaluation and leakage checks are required.
-
-## Repository layout
-
-```
-geopulse/
-  config.py
-  data/
-  features/
-  spatial/
-  models/
-  explainability/
-  genai/
-backend/
-dashboard/
-tests/
-configs/
-docs/
-scripts/
-```
-
-## Local development
-
-Python 3.11 is the initial target. Install dependencies with:
+Python 3.11 is recommended.
 
 ```bash
 python -m venv .venv
-# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Windows PowerShell: .venv\\Scripts\\Activate.ps1
 # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 ```
 
-Copy `.env.example` to `.env` and configure only the integrations you intend to use. Never commit secrets or raw datasets.
+Copy `.env.example` to `.env`. A Socrata app token is optional for small downloads; a Gemini API key is needed only for the AI analyst endpoint. Never commit secrets.
 
-## Data
+## Acquire data and train
 
-The initial candidate source is NYC 311 public service-request data. Its schema, licensing, availability, infrastructure-related categories, coordinate coverage, and temporal coverage must be checked before model training. OpenStreetMap may be used for contextual features subject to its usage policy and attribution requirements.
+Download a bounded NYC 311 date range and train the initial benchmark:
 
-See [Dataset notes](docs/datasets.md) and [Methodology](docs/methodology.md).
+```bash
+python scripts/train.py --start 2023-01-01 --end 2024-01-01 --limit 100000
+```
 
-## Quality principles
+Or provide a previously downloaded CSV:
 
-- No fabricated or placeholder model metrics presented as results.
-- Chronological splits; no future-derived features in training inputs.
-- Baselines before complex models.
-- Reproducible configuration and fixed random seeds.
-- Explicit CRS handling and metric-distance calculations.
-- Tests for data contracts, spatial operations, inference, and API behaviour.
-- LLM explanations must cite or quote structured model evidence and disclose uncertainty.
+```bash
+python scripts/train.py --input data/raw/nyc311.csv
+```
 
-## License
+The pipeline validates source columns, projects NYC coordinates to EPSG:32618, aggregates records to configurable 500 m cells, builds lagged 7/30/90-day features, labels whether a complaint occurs in the next 30 days, and compares logistic regression, random forest, and histogram gradient boosting on a chronological holdout. It writes model and evaluation artifacts locally under `artifacts/`; raw data and model binaries are excluded from Git.
 
-License selection is pending. Dataset terms and attribution requirements remain applicable independently of this repository's license.
+## Run the API and dashboard
+
+Terminal 1:
+
+```bash
+uvicorn backend.main:app --reload
+```
+
+Terminal 2:
+
+```streamlit run dashboard/app.py
+```
+
+Set `GEOPULSE_API_URL` when the API is not running at `http://127.0.0.1:8000`. FastAPI Swagger docs: `/docs`.
+
+## Tests
+
+```bash
+pytest
+```
+
+GitHub Actions runs the Python test suite on pushes and pull requests to `main` and `develop`.
+
+## Interpretation and limitations
+
+The initial projection is NYC-specific. Complaint recurrence is not infrastructure severity, and risk bands are provisional display categories. The initial temporal holdout does not fully remove spatial dependence between nearby cells. Model metrics must be generated from a real, documented data run before being used in a portfolio or operational claim. OSM enrichment, spatially blocked validation, calibrated thresholds, and deployment remain future work.
