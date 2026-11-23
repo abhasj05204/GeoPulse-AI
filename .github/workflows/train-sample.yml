@@ -1,0 +1,42 @@
+name: Real-data model smoke run
+on:
+  push:
+    branches: [feature/data-smoke]
+  workflow_dispatch:
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUNBUFFERED: "1"
+      GEOPULSE_INFRA_TYPES: Street Condition,Street Light Condition,Sidewalk Condition,Sewer,Water System,Highway Condition
+      SOCRATA_APP_TOKEN: ${{ secrets.SOCRATA_APP_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: pip install -e .
+      - name: Download bounded six-month NYC 311 sample
+        run: |
+          python -c "from datetime import date; from geopulse.data.nyc311 import download_nyc311; download_nyc311('data/raw/nyc311.csv', date(2025,1,1), date(2025,7,1), 30000)"
+      - name: Inspect source quality and category coverage
+        run: python scripts/inspect_data.py data/raw/nyc311.csv
+      - name: Train and evaluate on real civic data
+        run: python scripts/train.py --input data/raw/nyc311.csv --cell-size-m 1000 --horizon-days 30
+      - name: Print reproducible evaluation reports
+        if: always()
+        run: |
+          if [ -f artifacts/evaluation.json ]; then cat artifacts/evaluation.json; fi
+          if [ -f artifacts/feature_importance.json ]; then cat artifacts/feature_importance.json; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: geopulse-real-data-training-artifacts
+          path: |
+            artifacts/*.json
+            data/processed/source_audit.json
+          if-no-files-found: ignore
