@@ -7,7 +7,7 @@ from geopulse.models.inference import RecurrencePredictor
 from geopulse.spatial.hotspots import detect_hotspots
 from geopulse.genai.analyst import summarize
 
-app=FastAPI(title="GeoPulse AI API",version="0.4.0",description="Geospatial complaint recurrence analytics")
+app=FastAPI(title="GeoPulse AI API",version="0.4.1",description="Geospatial complaint recurrence analytics")
 class PredictionRequest(BaseModel): features:dict[str,float]=Field(...)
 class HotspotRequest(BaseModel): points:list[dict]=Field(...,min_length=2,max_length=10000); eps_m:float=500; min_samples:int=10
 class AnalystRequest(BaseModel): question:str=Field(...,min_length=1,max_length=1000); evidence:dict=Field(...)
@@ -74,12 +74,14 @@ def ai_summary(payload:AnalystRequest):
 @app.post("/api/ai/ask")
 def ai_ask(payload:AnalystQuestionRequest):
     try:
-        risks=latest_risks()["cells"]; report=performance(); importance=explain()
+        risk_data=latest_risks(); risks=risk_data["cells"]
+        report=performance(); importance=explain()
         counts={level:sum(1 for row in risks if row["risk_level"]==level) for level in ("High","Medium","Low")}
         top=sorted(risks,key=lambda row:row["recurrence_probability"],reverse=True)[:10]
-        evidence={"as_of":latest_risks()["as_of"],"cell_count":len(risks),"risk_band_counts":counts,
+        evidence={"as_of":risk_data["as_of"],"cell_count":len(risks),"risk_band_counts":counts,
           "top_10_recurrence_cells":top,"model_evaluation":report,"top_feature_importance":importance["features"][:8]}
         if len(str(evidence))>12000: evidence["top_10_recurrence_cells"]=top[:5]
+        if len(str(evidence))>12000: raise HTTPException(413,"Generated evidence context exceeds 12,000 characters")
         return {"summary":summarize(payload.question,evidence),"evidence_used":evidence}
     except HTTPException: raise
     except RuntimeError as exc: raise HTTPException(503,str(exc)) from exc
