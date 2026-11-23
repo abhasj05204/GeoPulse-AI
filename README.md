@@ -25,7 +25,7 @@ flowchart LR
   G --> I[Gemini evidence-grounded analyst]
 ```
 
-See [methodology](docs/methodology.md), [dataset notes](docs/datasets.md), [API reference](docs/api.md), [GenAI design](docs/genai.md), and [deployment guide](docs/deployment.md).
+See [methodology](docs/methodology.md), [dataset notes](docs/datasets.md), [real-data results](docs/results.md), [API reference](docs/api.md), [GenAI design](docs/genai.md), and [deployment guide](docs/deployment.md).
 
 ## Local setup
 
@@ -85,7 +85,7 @@ FastAPI Swagger documentation is at `/docs`. Set `GEOPULSE_API_URL` if the API i
 pytest
 ```
 
-GitHub Actions installs dependencies, installs the package in editable mode, and runs the test suite on pull requests and pushes to `main` and `develop`. A separate workflow performs a bounded real-data training smoke run.
+GitHub Actions installs dependencies, installs the package in editable mode, and runs the test suite on pull requests and pushes to `main` and `develop`. A separate workflow performs a bounded real-data training smoke run and uploads the model, panel, and evaluation artifacts.
 
 ## Interpretation and limitations
 
