@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pandas as pd
 import backend.main as api
 client=TestClient(api.app)
 
@@ -9,8 +10,7 @@ def test_health():
 def test_hotspot_endpoint_clusters_coordinates():
     points=[{"latitude":40.7,"longitude":-73.9},{"latitude":40.7001,"longitude":-73.9001},{"latitude":40.8,"longitude":-73.8}]
     response=client.post("/api/hotspots",json={"points":points,"eps_m":100,"min_samples":2})
-    assert response.status_code==200
-    assert response.json()["cluster_count"]==1
+    assert response.status_code==200 and response.json()["cluster_count"]==1
 
 def test_ai_ask_passes_current_evidence(monkeypatch):
     risk_data={"as_of":"2025-01-01","cells":[
@@ -27,3 +27,10 @@ def test_ai_ask_passes_current_evidence(monkeypatch):
     assert response.status_code==200
     assert captured["top_10_recurrence_cells"][0]["cx"]==1
     assert captured["risk_band_counts"]["High"]==1
+
+def test_trends_endpoint_returns_daily_aggregates(tmp_path,monkeypatch):
+    monkeypatch.setattr(api,"DATA_PROCESSED",tmp_path)
+    pd.DataFrame({"created_date":["2025-01-01","2025-01-01","2025-01-02"],"count":[2,3,4]}).to_csv(tmp_path/"cell_day_panel.csv",index=False)
+    response=client.get("/api/analytics/trends")
+    assert response.status_code==200
+    assert response.json()["daily"][0]["complaint_count"]==5

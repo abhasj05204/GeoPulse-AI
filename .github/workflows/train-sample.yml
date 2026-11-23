@@ -38,5 +38,7 @@ jobs:
           name: geopulse-real-data-training-artifacts
           path: |
             artifacts/*.json
+            artifacts/*.joblib
+            data/processed/cell_day_panel.csv
             data/processed/source_audit.json
           if-no-files-found: ignore
