@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: geopulse-api
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt && pip install -e .
+    startCommand: bash scripts/start_api.sh
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: GEOPULSE_TRAIN_ON_START
+        value: "true"
+      - key: GEOPULSE_TRAIN_START
+        value: "2025-01-01"
+      - key: GEOPULSE_TRAIN_END
+        value: "2025-07-01"
+      - key: GEOPULSE_TRAIN_LIMIT
+        value: "30000"
+      - key: GEOPULSE_CELL_SIZE_M
+        value: "1000"
+      - key: GEOPULSE_INFRA_TYPES
+        value: "Street Condition,Street Light Condition,Sidewalk Condition,Sewer,Water System,Highway Condition"
+      - key: SOCRATA_APP_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+
+  - type: web
+    name: geopulse-dashboard
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt && pip install -e .
+    startCommand: streamlit run dashboard/app.py --server.address 0.0.0.0 --server.port $PORT
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: GEOPULSE_API_URL
+        fromService:
+          type: web
+          name: geopulse-api
+          property: hostport

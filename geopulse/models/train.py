@@ -10,10 +10,11 @@ from sklearn.metrics import average_precision_score,precision_score,recall_score
 from sklearn.inspection import permutation_importance
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from geopulse.config import ARTIFACTS
 from geopulse.features.panel import FEATURES
 from geopulse.models.validation import temporal_cv_scores
 
-def train_models(panel:pd.DataFrame,output_dir:str|Path="artifacts",tuned_params:dict|None=None)->dict:
+def train_models(panel:pd.DataFrame,output_dir:str|Path=ARTIFACTS,tuned_params:dict|None=None)->dict:
     dates=pd.to_datetime(panel.created_date); cutoff=dates.quantile(.8)
     train,test=panel[dates<cutoff],panel[dates>=cutoff]
     if train.empty or test.empty or train.target.nunique()<2: raise ValueError("Insufficient temporal data or target classes")
