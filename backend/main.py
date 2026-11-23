@@ -1,12 +1,27 @@
 """FastAPI service for inference, analytics, hotspots, and grounded GenAI."""
-import json
-from fastapi import FastAPI,HTTPException
+import json,logging,os,time
+from fastapi import FastAPI,HTTPException,Request
 from pydantic import BaseModel,Field
 from geopulse.config import MODEL_PATH,ARTIFACTS,DATA_PROCESSED
 from geopulse.models.inference import RecurrencePredictor
 from geopulse.spatial.hotspots import detect_hotspots
 from geopulse.genai.analyst import summarize
-app=FastAPI(title="GeoPulse AI API",version="0.5.0",description="Geospatial complaint recurrence analytics")
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL","INFO").upper(),format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logger=logging.getLogger("geopulse.api")
+app=FastAPI(title="GeoPulse AI API",version="0.5.1",description="Geospatial complaint recurrence analytics")
+
+@app.middleware("http")
+async def request_logging(request:Request,call_next):
+    started=time.perf_counter()
+    try: response=await call_next(request)
+    except Exception:
+        logger.exception("request_failed method=%s path=%s",request.method,request.url.path)
+        raise
+    logger.info("request_complete method=%s path=%s status=%s duration_ms=%.1f",
+      request.method,request.url.path,response.status_code,(time.perf_counter()-started)*1000)
+    return response
+
 class PredictionRequest(BaseModel): features:dict[str,float]=Field(...)
 class HotspotRequest(BaseModel): points:list[dict]=Field(...,min_length=2,max_length=10000); eps_m:float=500; min_samples:int=10
 class AnalystRequest(BaseModel): question:str=Field(...,min_length=1,max_length=1000); evidence:dict=Field(...)
@@ -35,15 +50,13 @@ def analytics_summary():
     if not path.exists(): raise HTTPException(503,"Processed panel not found; run the training pipeline first")
     df=pd.read_csv(path)
     return {"panel_rows":len(df),"spatial_cells":int(df[["cx","cy"]].drop_duplicates().shape[0]),
-      "date_start":str(df.created_date.min()),"date_end":str(df.created_date.max()),
-      "panel_events":int(df["count"].sum())}
+      "date_start":str(df.created_date.min()),"date_end":str(df.created_date.max()),"panel_events":int(df["count"].sum())}
 @app.get("/api/analytics/trends")
 def analytics_trends():
     import pandas as pd
     path=DATA_PROCESSED/"cell_day_panel.csv"
     if not path.exists(): raise HTTPException(503,"Processed panel not found; run the training pipeline first")
-    df=pd.read_csv(path)
-    daily=df.groupby("created_date",as_index=False)["count"].sum().sort_values("created_date")
+    df=pd.read_csv(path); daily=df.groupby("created_date",as_index=False)["count"].sum().sort_values("created_date")
     return {"daily":daily.rename(columns={"count":"complaint_count"}).to_dict(orient="records")}
 @app.get("/api/risks")
 def latest_risks():

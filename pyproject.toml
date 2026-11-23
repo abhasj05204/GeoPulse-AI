@@ -1,16 +1,20 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
+
 [project]
 name = "geopulse-ai"
 version = "0.1.0"
 description = "Geospatial ML for urban infrastructure complaint recurrence intelligence"
 requires-python = ">=3.11"
 dynamic = ["dependencies"]
+
 [tool.setuptools.packages.find]
-include = ["geopulse*", "backend*"]
+include = ["geopulse*", "backend*", "dashboard*"]
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

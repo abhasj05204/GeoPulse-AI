@@ -1,6 +1,6 @@
 # Real-data experiment: NYC 311, January–June 2025
 
-**Status: Completed successfully in GitHub Actions.**
+**Status: Completed successfully in GitHub Actions, including 10 Optuna trials.**
 
 ## Dataset and cohort
 
@@ -13,8 +13,9 @@
 - Prediction target: at least one new complaint in the next 30 days.
 - Retained panel: 79,662 cell-day rows; chronological cutoff 2025-04-24.
 - Training rows: 63,393. Final holdout rows: 16,269.
+- Observed sample dates: 2025-01-01 through 2025-06-21.
 
-This is a bounded, time-slice-stratified sample, not the complete NYC 311 population. The sample's observed records run from 2025-01-01 through 2025-06-21. The exact source audit is included in the linked workflow artifact.
+This is a bounded, time-slice-stratified sample, not the complete NYC 311 population.
 
 ## Model selection
 
@@ -24,10 +25,21 @@ The selected model is Random Forest. Selection used mean PR-AUC across three exp
 |---|---:|---:|---:|---:|
 | Logistic Regression | 0.4911 | 0.4561 | 0.6240 | 0.2240 |
 | Random Forest | **0.6405** | **0.5581** | **0.7297** | **0.1972** |
-| Histogram Gradient Boosting | 0.5708 | 0.4689 | 0.6650 | 0.2122 |
+| Histogram Gradient Boosting (Optuna-tuned) | 0.5988 | 0.5167 | 0.7095 | 0.2053 |
 | Prior-probability baseline | — | 0.3308 | — | 0.2270 |
 
 Random Forest holdout PR-AUC is 0.2273 absolute points (about 68.7% relative) above the prior baseline. The holdout positive rate is 0.3308, which is also the PR-AUC of the constant prior baseline.
+
+### Optuna result
+
+Ten trials tuned histogram gradient boosting using expanding-window temporal CV. Best HGB CV PR-AUC was 0.5988; it did not exceed Random Forest's 0.6405 CV PR-AUC, so Random Forest remained selected.
+
+Best HGB parameters:
+
+- `max_iter=187`
+- `learning_rate=0.1161`
+- `max_leaf_nodes=49`
+- `l2_regularization=0.00152`
 
 ## Operating point and risk bands
 
@@ -56,9 +68,9 @@ The strong coordinate contribution suggests the model captures spatial structure
 
 ## Reproducibility artifact
 
-[Download the evaluation report, feature-importance report, and source audit from the successful GitHub Actions run](https://github.com/abhasj05204/GeoPulse-AI/actions/runs/45248112326/artifacts/14855750017).
+[Download the trained model, processed panel, evaluation report, feature-importance report, Optuna result, and source audit from the successful GitHub Actions run](https://github.com/abhasj05204/GeoPulse-AI/actions/runs/45249192051/artifacts/14855006814).
 
-The linked artifact is tied to the exact workflow run and source revision. The workflow definition now also uploads the saved model and processed panel on subsequent runs.
+The artifact is tied to the exact workflow run and source revision. Re-run the workflow after changing the dataset window, complaint cohort, grid size, or model code.
 
 ## Limitations
 

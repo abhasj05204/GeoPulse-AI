@@ -5,13 +5,13 @@ import requests
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from dashboard.api_client import api_base_url,get_json,post_json
 load_dotenv()
 st.set_page_config(page_title="GeoPulse AI",page_icon="🗺️",layout="wide")
 st.title("GeoPulse AI"); st.caption("Predict. Prioritize. Prevent. · Geospatial complaint recurrence intelligence")
-api=os.getenv("GEOPULSE_API_URL","http://127.0.0.1:8000").rstrip("/")
-if "://" not in api: api=f"http://{api}"
-def get(path):
-    r=requests.get(f"{api}{path}",timeout=20); r.raise_for_status(); return r.json()
+api=api_base_url()
+def get(path,timeout=20): return get_json(api,path,timeout)
+def post(path,payload,timeout=30): return post_json(api,path,payload,timeout)
 try:
     health=get("/api/health"); a,b=st.columns(2); a.metric("API",health["status"]); b.metric("Trained model","Available" if health["model_available"] else "Not trained")
 except requests.RequestException: st.error("FastAPI is unavailable. Start the backend to load live analytics."); st.stop()
@@ -55,8 +55,8 @@ with tabs[2]:
         else:
             points=data.dropna(subset=["latitude","longitude"]).head(3000).to_dict(orient="records")
             try:
-                r=requests.post(f"{api}/api/hotspots",json={"points":points,"eps_m":500,"min_samples":8},timeout=60); r.raise_for_status()
-                result=r.json(); spatial=pd.DataFrame(result["points"]); st.write(f"Clusters: {result['cluster_count']} · Noise points: {result['noise_count']}")
+                result=post("/api/hotspots",{"points":points,"eps_m":500,"min_samples":8},timeout=60)
+                spatial=pd.DataFrame(result["points"]); st.write(f"Clusters: {result['cluster_count']} · Noise points: {result['noise_count']}")
                 fig=px.scatter_mapbox(spatial,lat="latitude",lon="longitude",color=spatial["cluster"].astype(str),zoom=10,mapbox_style="open-street-map",height=600)
                 st.plotly_chart(fig,use_container_width=True)
             except requests.RequestException as exc: st.error(f"Hotspot analysis failed: {exc}")
@@ -69,7 +69,7 @@ with tabs[3]:
         submitted=st.form_submit_button("Estimate recurrence risk")
     if submitted:
         try:
-            r=requests.post(f"{api}/api/predict",json={"features":features},timeout=30); r.raise_for_status(); out=r.json()
+            out=post("/api/predict",{"features":features})
             st.metric("30-day recurrence probability",f"{out['recurrence_probability']:.1%}"); st.metric("Risk band",out["risk_level"]); st.json(out)
         except requests.RequestException as exc: st.error(str(exc))
 with tabs[4]:
@@ -78,7 +78,6 @@ with tabs[4]:
         if not question.strip(): st.warning("Enter a question first.")
         else:
             try:
-                r=requests.post(f"{api}/api/ai/ask",json={"question":question},timeout=60); r.raise_for_status()
-                answer=r.json(); st.write(answer["summary"])
+                answer=post("/api/ai/ask",{"question":question},timeout=60); st.write(answer["summary"])
                 with st.expander("View evidence supplied to the model"): st.json(answer["evidence_used"])
             except requests.RequestException as exc: st.error(f"AI analyst unavailable: {exc}")
