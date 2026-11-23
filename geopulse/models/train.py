@@ -1,4 +1,4 @@
-"""Chronological benchmark training, evaluation, and permutation importance."""
+"""Chronological benchmark, date-blocked CV, and permutation importance."""
 import json
 from pathlib import Path
 import joblib
@@ -11,20 +11,26 @@ from sklearn.inspection import permutation_importance
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from geopulse.features.panel import FEATURES
+from geopulse.models.validation import temporal_cv_scores
 
-def train_models(panel:pd.DataFrame,output_dir:str|Path="artifacts")->dict:
+def train_models(panel:pd.DataFrame,output_dir:str|Path="artifacts",tuned_params:dict|None=None)->dict:
     dates=pd.to_datetime(panel.created_date); cutoff=dates.quantile(.8)
     train,test=panel[dates<cutoff],panel[dates>=cutoff]
     if train.empty or test.empty or train.target.nunique()<2: raise ValueError("Insufficient temporal data or target classes")
     Xtr,ytr=train[FEATURES],train.target.astype(int); Xte,yte=test[FEATURES],test.target.astype(int)
-    models={
+    hgb_params={"max_iter":150,"learning_rate":.08,"random_state":42,**(tuned_params or {})}
+    candidates={
       "logistic_regression":Pipeline([("impute",SimpleImputer(strategy="median")),("scale",StandardScaler()),("model",LogisticRegression(max_iter=1000,class_weight="balanced"))]),
       "random_forest":Pipeline([("impute",SimpleImputer(strategy="median")),("model",RandomForestClassifier(n_estimators=200,min_samples_leaf=3,class_weight="balanced",random_state=42,n_jobs=-1))]),
-      "hist_gradient_boosting":Pipeline([("impute",SimpleImputer(strategy="median")),("model",HistGradientBoostingClassifier(max_iter=150,learning_rate=.08,random_state=42))])}
+      "hist_gradient_boosting":Pipeline([("impute",SimpleImputer(strategy="median")),("model",HistGradientBoostingClassifier(**hgb_params))])}
     reports={}; fitted={}
-    for name,model in models.items():
+    for name,model in candidates.items():
+        cv=temporal_cv_scores(model,train,n_splits=3)
         model.fit(Xtr,ytr); prob=model.predict_proba(Xte)[:,1]; pred=prob>=.5
-        metrics={"precision":float(precision_score(yte,pred,zero_division=0)),"recall":float(recall_score(yte,pred,zero_division=0)),"f1":float(f1_score(yte,pred,zero_division=0)),"pr_auc":float(average_precision_score(yte,prob)),"brier_score":float(brier_score_loss(yte,prob))}
+        metrics={"precision":float(precision_score(yte,pred,zero_division=0)),"recall":float(recall_score(yte,pred,zero_division=0)),
+          "f1":float(f1_score(yte,pred,zero_division=0)),"pr_auc":float(average_precision_score(yte,prob)),
+          "brier_score":float(brier_score_loss(yte,prob)),"cv_pr_auc_mean":float(sum(cv)/len(cv)) if cv else None,
+          "cv_pr_auc_std":float(pd.Series(cv).std(ddof=0)) if cv else None,"cv_folds":len(cv)}
         if yte.nunique()==2: metrics["roc_auc"]=float(roc_auc_score(yte,prob))
         reports[name]=metrics; fitted[name]=model
     best=max(reports,key=lambda name:reports[name]["pr_auc"]); selected=fitted[best]
