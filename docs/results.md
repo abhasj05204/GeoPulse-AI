@@ -1,11 +1,11 @@
 # Real-data experiment: NYC 311, January–June 2025
 
-<badge color="success">Completed in GitHub Actions</badge>
+**Status: Completed successfully in GitHub Actions.**
 
 ## Dataset and cohort
 
 - Source: NYC Open Data, 311 Service Requests from 2020 to Present (dataset ID `erm2-nwe9`).
-- Acquisition window: 2025-01-01 through 2025-07-01 (end exclusive).
+- Query window: 2025-01-01 through 2025-07-01 (end exclusive).
 - Bounded sample: 30,000 records; 146 complaint categories observed.
 - Coordinate and timestamp validation: 30,000 valid records; 100% latitude and longitude coverage.
 - Infrastructure cohort: configured road, streetlight, sidewalk, sewer, water-system, water-leak, and traffic-signal complaint types.
@@ -14,7 +14,7 @@
 - Retained panel: 79,662 cell-day rows; chronological cutoff 2025-04-24.
 - Training rows: 63,393. Final holdout rows: 16,269.
 
-This is a bounded, time-slice-stratified sample, not the complete NYC 311 population. The exact source audit is included in the linked workflow artifact.
+This is a bounded, time-slice-stratified sample, not the complete NYC 311 population. The sample's observed records run from 2025-01-01 through 2025-06-21. The exact source audit is included in the linked workflow artifact.
 
 ## Model selection
 
@@ -56,9 +56,9 @@ The strong coordinate contribution suggests the model captures spatial structure
 
 ## Reproducibility artifact
 
-[Download the evaluation report, feature-importance report, source audit, and model artifacts from the successful GitHub Actions run](https://github.com/abhasj05204/GeoPulse-AI/actions/runs/45248112326/artifacts/14855750017).
+[Download the evaluation report, feature-importance report, and source audit from the successful GitHub Actions run](https://github.com/abhasj05204/GeoPulse-AI/actions/runs/45248112326/artifacts/14855750017).
 
-The artifact is tied to the exact workflow run and source revision. Re-run the workflow after changing the dataset window, complaint cohort, grid size, or model code.
+The linked artifact is tied to the exact workflow run and source revision. The workflow definition now also uploads the saved model and processed panel on subsequent runs.
 
 ## Limitations
 
