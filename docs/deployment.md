@@ -5,13 +5,13 @@
 The repository includes `render.yaml` with two lightweight Python web services:
 
 1. `geopulse-api`: FastAPI backend. On first startup it can acquire a bounded six-month NYC 311 sample, filter configured infrastructure categories, train the model, save artifacts, and start Uvicorn.
-2. `geopulse-dashboard`: Streamlit analytical dashboard. It obtains the API's internal host/port from the Render service reference.
+2. `geopulse-dashboard`: Streamlit analytical dashboard. Its API URL is resolved from the API service's public `RENDER_EXTERNAL_URL`, so the two Free web services do not depend on private-network ingress.
 
 ### Deploy
 
 1. Push the repository to GitHub.
 2. In Render, create a new Blueprint and connect this repository.
-3. Review the two services and their free-plan limits, then apply the Blueprint.
+3. Review the two services and their free-plan limitations, then apply the Blueprint.
 4. Optionally add `SOCRATA_APP_TOKEN` to the API service to improve Socrata request limits.
 5. Add `GEMINI_API_KEY` to the API service to enable the AI analyst. ML and spatial APIs work without this key.
 6. Wait for the API's initial data acquisition/training startup to complete, then open the dashboard service URL.
@@ -26,9 +26,11 @@ For a local/manual run, set `GEOPULSE_TRAIN_ON_START=false` and use `python scri
 
 ## Storage and service limits
 
-The free Render plan uses an ephemeral filesystem. Model and processed-data artifacts may need to be regenerated after a fresh instance or redeploy. For persistent artifacts, upgrade the API service and attach a persistent disk, then set `GEOPULSE_STORAGE_DIR` to the disk mount path (for example `/var/data`). The API stores raw data, processed panels, and model artifacts beneath that directory. The dashboard does not need direct filesystem access; it reads results through FastAPI.
+Render Free web services spin down after 15 minutes without traffic and can take about a minute to spin back up. Their filesystem is ephemeral: files are lost on restart, redeploy, or spin-down. The configured API therefore retrains from the bounded public sample when the model artifact is missing. This increases cold-start time and external API traffic. Free services cannot attach persistent disks and should be treated as a demo environment, not production hosting.
 
-Free services may sleep when idle and cold-start latency is expected. The configured training run can exceed typical interactive startup time; if that occurs, disable train-on-start and run training as a separate one-off job or use a persistent paid service. Actual service URLs are assigned by Render and are not pre-generated in this repository.
+For persistent artifacts, upgrade the API service to a paid compute plan, attach a persistent disk, and set `GEOPULSE_STORAGE_DIR` to its mount path (for example `/var/data`). The API stores raw data, processed panels, and model artifacts beneath that directory. The dashboard does not need direct filesystem access; it reads results through FastAPI. A disk is accessible only to its attached service.
+
+Actual service URLs are assigned by Render and are not pre-generated in this repository. The dashboard uses the API's public service URL through the Blueprint reference.
 
 ## Secrets
 

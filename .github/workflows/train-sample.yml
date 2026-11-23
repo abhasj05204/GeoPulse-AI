@@ -1,7 +1,7 @@
 name: Real-data model smoke run
 on:
   push:
-    branches: [feature/model-selection]
+    branches: [feature/model-artifacts]
   workflow_dispatch:
 jobs:
   train:
@@ -25,13 +25,14 @@ jobs:
           python -c "from datetime import date; from geopulse.data.nyc311 import download_nyc311; download_nyc311('data/raw/nyc311.csv', date(2025,1,1), date(2025,7,1), 30000)"
       - name: Inspect source quality and category coverage
         run: python scripts/inspect_data.py data/raw/nyc311.csv
-      - name: Train and evaluate on real civic data
-        run: python scripts/train.py --input data/raw/nyc311.csv --cell-size-m 1000 --horizon-days 30
+      - name: Train, tune, and evaluate on real civic data
+        run: python scripts/train.py --input data/raw/nyc311.csv --cell-size-m 1000 --horizon-days 30 --tune --trials 10
       - name: Print reproducible evaluation reports
         if: always()
         run: |
           if [ -f artifacts/evaluation.json ]; then cat artifacts/evaluation.json; fi
           if [ -f artifacts/feature_importance.json ]; then cat artifacts/feature_importance.json; fi
+          if [ -f artifacts/optimization.json ]; then cat artifacts/optimization.json; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
