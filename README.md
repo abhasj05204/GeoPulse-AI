@@ -5,7 +5,7 @@ GeoPulse AI is a geospatial machine-learning project that analyses urban infrast
 
 ## Strict project scope
 
-1. **ML pipelines:** public civic-data acquisition, validation, infrastructure category filtering, projected spatial aggregation, leakage-aware temporal and neighboring-cell features, model benchmarking, temporal cross-validation, Optuna tuning, and permutation importance.
+1. **ML pipelines:** public civic-data acquisition, validation, infrastructure category filtering, projected spatial aggregation, leakage-aware temporal and neighboring-cell features, model benchmarking, date-blocked cross-validation, Optuna tuning, and permutation importance.
 2. **Backend APIs:** FastAPI endpoints for inference, spatial clustering, cell risk maps, evaluation reports, and optional Gemini-based analytical questions.
 3. **Analytical dashboard:** Streamlit views for model metrics, feature importance, interactive risk maps, DBSCAN hotspot exploration, predictions, and evidence-grounded AI answers.
 
@@ -18,7 +18,7 @@ flowchart LR
   A[NYC 311 public data] --> B[Validation and infrastructure filtering]
   B --> C[Projected spatial cells]
   C --> D[Temporal and neighbor features]
-  D --> E[Chronological ML evaluation]
+  D --> E[Chronological CV and holdout evaluation]
   E --> F[Saved model and reports]
   F --> G[FastAPI]
   G --> H[Streamlit dashboard]
@@ -43,13 +43,13 @@ Copy `.env.example` to `.env`. The NYC Open Data token is optional for small dow
 
 ## Inspect, acquire, and train
 
-Inspect an existing raw dataset to verify complaint category values:
+Inspect a raw dataset to verify complaint category values:
 
 ```bash
 python scripts/inspect_data.py data/raw/nyc311.csv
 ```
 
-Acquire a bounded, month-stratified NYC 311 sample and train:
+Acquire a bounded, month/time-slice-stratified NYC 311 sample and train:
 
 ```bash
 python scripts/train.py --start 2025-01-01 --end 2025-07-01 --limit 30000 --cell-size-m 1000
@@ -61,7 +61,7 @@ To tune histogram gradient boosting with Optuna:
 python scripts/train.py --input data/raw/nyc311.csv --cell-size-m 1000 --tune --trials 15
 ```
 
-The default modelling cohort is restricted to configured infrastructure complaint types. Override with `--complaint-types` or `GEOPULSE_INFRA_TYPES` after inspecting source categories. The pipeline writes the cell/day panel, model, evaluation report, and permutation importance locally. Raw data and binary artifacts are excluded from Git.
+The default modelling cohort is restricted to configured infrastructure complaint types. Override with `--complaint-types` or `GEOPULSE_INFRA_TYPES` after inspecting source categories. Model selection uses mean temporal cross-validation PR-AUC; the final chronological holdout is reserved for reporting. Risk bands are relative quantiles of out-of-fold training probabilities, not fixed severity levels. The pipeline writes the cell/day panel, model, evaluation report, and permutation importance locally. Raw data and binary artifacts are excluded from Git.
 
 ## Run the API and dashboard
 
@@ -85,8 +85,8 @@ FastAPI Swagger documentation is at `/docs`. Set `GEOPULSE_API_URL` if the API i
 pytest
 ```
 
-GitHub Actions installs dependencies, installs the package in editable mode, and runs the test suite on pull requests and pushes to `main` and `develop`.
+GitHub Actions installs dependencies, installs the package in editable mode, and runs the test suite on pull requests and pushes to `main` and `develop`. A separate workflow performs a bounded real-data training smoke run.
 
 ## Interpretation and limitations
 
-The initial data source and projection are NYC-specific. The model estimates complaint recurrence, not defect severity or engineering risk. Risk bands are provisional display categories. Chronological CV reduces temporal leakage but does not fully remove spatial dependence; spatially blocked evaluation and calibration are still needed before operational use. OSM enrichment is not implemented in this version. Real-data performance numbers must come from a documented training run and must not be inferred from the unit-test synthetic fixture.
+The initial data source and projection are NYC-specific. The model estimates complaint recurrence, not defect severity or engineering risk. Low/Medium/High bands are cohort-relative and not calibrated absolute probabilities. Chronological CV reduces temporal leakage but does not fully remove spatial dependence; spatially blocked evaluation and calibration are still needed before operational use. OSM enrichment is not implemented in this version. Performance metrics must come from a documented real-data run; synthetic test fixtures are not performance evidence.

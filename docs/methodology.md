@@ -1,16 +1,22 @@
 # Modelling methodology
 
-The initial prediction unit is a projected square grid cell observed daily. The label is whether the cell receives at least one new complaint during the next 30 days. Grid size and horizon are configurable and must be sensitivity-tested.
+The prediction unit is a projected square grid cell observed daily. The label is whether the cell receives at least one new infrastructure complaint during the next 30 days. Grid size and horizon are configurable and should be sensitivity-tested.
 
 ## Leakage controls
-- NYC longitude/latitude are transformed from EPSG:4326 to EPSG:32618 before cell assignment.
-- Rolling predictors are shifted by one day and therefore exclude the prediction date.
+- NYC timestamps are interpreted in America/New_York local time; coordinates are transformed from EPSG:4326 to EPSG:32618 before grid assignment.
+- Rolling predictors are shifted by one day and exclude the prediction date.
+- Neighbour-cell counts aggregate already-lagged 30-day counts from the eight adjacent cells.
 - Labels use only future daily counts; rows without a fully observed horizon are removed.
-- A chronological 80/20 holdout is used; no random row split.
-- Preprocessing is fitted inside each model pipeline on training data only.
+- Preprocessors are fitted inside each estimator pipeline on training folds only.
+- The final 20% chronological holdout is not used for model selection or threshold selection.
 
-## Initial models and metrics
-Balanced logistic regression, random forest, and histogram gradient boosting are compared. Precision, recall, F1, PR-AUC, Brier score, and ROC-AUC (when defined) are reported. The highest holdout PR-AUC selects the persisted model. A persistence baseline, rolling-origin validation, calibration checks, spatially blocked robustness tests, and tuned thresholds are planned before operational interpretation.
+## Validation and model selection
+The training period is evaluated with expanding-window `TimeSeriesSplit` folds built from unique calendar dates, so all cells from one date remain in the same fold. Logistic regression, random forest, and histogram gradient boosting are compared using mean temporal-CV PR-AUC. The model with the highest mean CV PR-AUC is selected; the final chronological holdout is then used once for reporting generalization metrics.
+
+A prior-probability `DummyClassifier` is reported as a baseline. Reports include precision, recall, F1 at 0.5, PR-AUC, ROC-AUC where defined, Brier score, and CV mean/std. A separate operating threshold is selected from the chosen model's out-of-fold training-period precision-recall curve by maximizing F1, and its holdout precision/recall/F1 are reported separately.
+
+## Risk bands and explainability
+The API's Low/Medium/High labels are cohort-relative bands derived from the 50th and 80th percentiles of temporal out-of-fold training probabilities. They are not absolute calibrated risk thresholds and are not infrastructure severity ratings. The numeric recurrence probability remains the model output. Permutation importance is computed on the untouched holdout using average precision; negative importance means shuffling a feature did not harm (and may improve) holdout score.
 
 ## Known limitations
-The current projection is NYC-specific. Complaint rows within adjacent cells and dates are dependent; the initial chronological split does not eliminate spatial leakage. Complaint recurrence is not defect severity. Risk bands are provisional display categories and must not be interpreted as calibrated maintenance priority.
+The initial projection and source are NYC-specific. Complaint recurrence is not defect severity. The initial chronological evaluation does not fully remove spatial dependence between nearby cells; spatially blocked validation and probability calibration are important next steps. Model performance and risk bands should not be used for operational maintenance decisions without local engineering review.
