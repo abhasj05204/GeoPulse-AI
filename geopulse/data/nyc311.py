@@ -4,17 +4,17 @@ from datetime import date
 from pathlib import Path
 import pandas as pd
 import requests
-
 REQUIRED={"created_date","complaint_type","latitude","longitude"}
 DEFAULT_INFRA_TYPES=["Street Condition","Street Light Condition","Sidewalk Condition","Sewer","Water System","Highway Condition"]
 
 def download_nyc311(output:str|Path,start:date,end:date,limit:int=100000)->Path:
-    """Download a bounded sample spread across months and within each month."""
+    """Download a bounded sample spread across complete calendar months in [start, end)."""
     if start>=end or limit<1: raise ValueError("Require start < end and a positive limit")
     base=os.getenv("NYC311_API_BASE","https://data.cityofnewyork.us").rstrip("/")
     dataset=os.getenv("NYC311_DATASET_ID","erm2-nwe9")
     headers={"X-App-Token":os.environ["SOCRATA_APP_TOKEN"]} if os.getenv("SOCRATA_APP_TOKEN") else {}
-    first=pd.Timestamp(start).replace(day=1); last=pd.Timestamp(end).replace(day=1)
+    first=pd.Timestamp(start).replace(day=1)
+    last=pd.Timestamp(end-pd.Timedelta(days=1)).replace(day=1)
     months=pd.date_range(first,last,freq="MS")
     budget=max(1,math.ceil(limit/len(months))); rows=[]
     for month in months:
@@ -27,8 +27,7 @@ def download_nyc311(output:str|Path,start:date,end:date,limit:int=100000)->Path:
         count_response.raise_for_status(); count=int(count_response.json()[0]["n"])
         if count==0: continue
         samples=min(3,budget,count); chunk=max(1,math.ceil(min(budget,count)/samples))
-        if samples==1: offsets=[0]
-        else: offsets=sorted({round(i*(count-chunk)/(samples-1)) for i in range(samples)})
+        offsets=[0] if samples==1 else sorted({round(i*(count-chunk)/(samples-1)) for i in range(samples)})
         for offset in offsets:
             response=requests.get(f"{base}/resource/{dataset}.json",headers=headers,timeout=60,
               params={"$select":"unique_key,created_date,complaint_type,latitude,longitude",
@@ -55,7 +54,6 @@ def validate_complaints(frame:pd.DataFrame)->pd.DataFrame:
     return df.sort_values("created_date").reset_index(drop=True)
 
 def filter_infrastructure_complaints(frame:pd.DataFrame,complaint_types:list[str]|None=None)->pd.DataFrame:
-    """Restrict the modelling cohort to explicit infrastructure complaint classes."""
     configured=os.getenv("GEOPULSE_INFRA_TYPES")
     selected=complaint_types or ([x.strip() for x in configured.split(",") if x.strip()] if configured else DEFAULT_INFRA_TYPES)
     wanted={value.casefold() for value in selected}
