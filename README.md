@@ -1,19 +1,31 @@
 # GeoPulse AI
 ### Predict. Prioritize. Prevent.
 
-GeoPulse AI is a focused geospatial machine-learning project for identifying spatial complaint hotspots, estimating 30-day complaint recurrence risk, exposing model outputs through FastAPI, and exploring results in a compact Streamlit dashboard.
+GeoPulse AI is a geospatial machine-learning project that analyses urban infrastructure service requests, detects complaint hotspots, estimates 30-day recurrence risk by spatial cell, and explains model outputs using evidence-grounded Generative AI.
 
 ## Strict project scope
 
-- **ML pipelines:** public complaint data ingestion, validation, projected spatial aggregation, leakage-aware temporal features, recurrence modelling, evaluation, and permutation-based explainability.
-- **Backend API:** FastAPI endpoints for inference, hotspot clustering, model reports, and optional evidence-grounded GenAI summaries.
-- **Analytical dashboard:** Streamlit interface for model metrics, feature importance, CSV-based hotspot exploration, predictions, and AI summaries.
+1. **ML pipelines:** public civic-data acquisition, validation, infrastructure category filtering, projected spatial aggregation, leakage-aware temporal and neighboring-cell features, model benchmarking, temporal cross-validation, Optuna tuning, and permutation importance.
+2. **Backend APIs:** FastAPI endpoints for inference, spatial clustering, cell risk maps, evaluation reports, and optional Gemini-based analytical questions.
+3. **Analytical dashboard:** Streamlit views for model metrics, feature importance, interactive risk maps, DBSCAN hotspot exploration, predictions, and evidence-grounded AI answers.
 
-No marketing site, authentication, profiles, subscriptions, or unrelated CRUD application is included. GenAI is an optional explanatory layer and does not replace the ML model.
+No marketing website, authentication, user accounts, subscriptions, payment systems, or unrelated CRUD application is included.
 
 ## Architecture
 
-See [architecture](docs/architecture.md), [methodology](docs/methodology.md), [dataset notes](docs/datasets.md), and [API reference](docs/api.md).
+```mermaid
+flowchart LR
+  A[NYC 311 public data] --> B[Validation and infrastructure filtering]
+  B --> C[Projected spatial cells]
+  C --> D[Temporal and neighbor features]
+  D --> E[Chronological ML evaluation]
+  E --> F[Saved model and reports]
+  F --> G[FastAPI]
+  G --> H[Streamlit dashboard]
+  G --> I[Gemini evidence-grounded analyst]
+```
+
+See [methodology](docs/methodology.md), [dataset notes](docs/datasets.md), [API reference](docs/api.md), [GenAI design](docs/genai.md), and [deployment guide](docs/deployment.md).
 
 ## Local setup
 
@@ -27,23 +39,29 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-Copy `.env.example` to `.env`. A Socrata app token is optional for small downloads; a Gemini API key is needed only for the AI analyst endpoint. Never commit secrets.
+Copy `.env.example` to `.env`. The NYC Open Data token is optional for small downloads. A Gemini API key is needed only for the AI analyst.
 
-## Acquire data and train
+## Inspect, acquire, and train
 
-Download a bounded NYC 311 date range and train the initial benchmark:
-
-```bash
-python scripts/train.py --start 2023-01-01 --end 2024-01-01 --limit 100000
-```
-
-Or provide a previously downloaded CSV:
+Inspect an existing raw dataset to verify complaint category values:
 
 ```bash
-python scripts/train.py --input data/raw/nyc311.csv
+python scripts/inspect_data.py data/raw/nyc311.csv
 ```
 
-The pipeline validates source columns, projects NYC coordinates to EPSG:32618, aggregates records to configurable 500 m cells, builds lagged 7/30/90-day features, labels whether a complaint occurs in the next 30 days, and compares logistic regression, random forest, and histogram gradient boosting on a chronological holdout. It writes model and evaluation artifacts locally under `artifacts/`; raw data and model binaries are excluded from Git.
+Acquire a bounded, month-stratified NYC 311 sample and train:
+
+```bash
+python scripts/train.py --start 2025-01-01 --end 2025-07-01 --limit 30000 --cell-size-m 1000
+```
+
+To tune histogram gradient boosting with Optuna:
+
+```bash
+python scripts/train.py --input data/raw/nyc311.csv --cell-size-m 1000 --tune --trials 15
+```
+
+The default modelling cohort is restricted to configured infrastructure complaint types. Override with `--complaint-types` or `GEOPULSE_INFRA_TYPES` after inspecting source categories. The pipeline writes the cell/day panel, model, evaluation report, and permutation importance locally. Raw data and binary artifacts are excluded from Git.
 
 ## Run the API and dashboard
 
@@ -55,10 +73,11 @@ uvicorn backend.main:app --reload
 
 Terminal 2:
 
-```streamlit run dashboard/app.py
+```bash
+streamlit run dashboard/app.py
 ```
 
-Set `GEOPULSE_API_URL` when the API is not running at `http://127.0.0.1:8000`. FastAPI Swagger docs: `/docs`.
+FastAPI Swagger documentation is at `/docs`. Set `GEOPULSE_API_URL` if the API is not at `http://127.0.0.1:8000`.
 
 ## Tests
 
@@ -66,8 +85,8 @@ Set `GEOPULSE_API_URL` when the API is not running at `http://127.0.0.1:8000`. F
 pytest
 ```
 
-GitHub Actions runs the Python test suite on pushes and pull requests to `main` and `develop`.
+GitHub Actions installs dependencies, installs the package in editable mode, and runs the test suite on pull requests and pushes to `main` and `develop`.
 
 ## Interpretation and limitations
 
-The initial projection is NYC-specific. Complaint recurrence is not infrastructure severity, and risk bands are provisional display categories. The initial temporal holdout does not fully remove spatial dependence between nearby cells. Model metrics must be generated from a real, documented data run before being used in a portfolio or operational claim. OSM enrichment, spatially blocked validation, calibrated thresholds, and deployment remain future work.
+The initial data source and projection are NYC-specific. The model estimates complaint recurrence, not defect severity or engineering risk. Risk bands are provisional display categories. Chronological CV reduces temporal leakage but does not fully remove spatial dependence; spatially blocked evaluation and calibration are still needed before operational use. OSM enrichment is not implemented in this version. Real-data performance numbers must come from a documented training run and must not be inferred from the unit-test synthetic fixture.
