@@ -1,5 +1,5 @@
 """Streamlit analytical dashboard consuming GeoPulse API results."""
-import os,json
+import os
 from dotenv import load_dotenv
 import requests
 import pandas as pd
@@ -20,10 +20,19 @@ with tabs[0]:
     try:
         summary=get("/api/analytics/summary"); cards=st.columns(4)
         cards[0].metric("Panel rows",f"{summary['panel_rows']:,}"); cards[1].metric("Spatial cells",f"{summary['spatial_cells']:,}")
-        cards[2].metric("Complaint events",f"{summary['complaint_events']:,}"); cards[3].metric("Observed through",summary["date_end"])
-        report=get("/api/performance"); st.subheader("Chronological holdout evaluation")
-        st.caption(f"Selected model: {report['best_model']} · cutoff: {report['temporal_cutoff']}")
+        cards[2].metric("Events in labelled panel",f"{summary['panel_events']:,}"); cards[3].metric("Observed through",summary["date_end"])
+        report=get("/api/performance"); model=get("/api/model")
+        st.subheader("Model selection and holdout evaluation")
+        st.caption(f"Selected by temporal-CV PR-AUC: {report['best_model']} · holdout starts {report['temporal_cutoff']}")
         st.dataframe(pd.DataFrame(report["metrics"]).T,use_container_width=True)
+        base,threshold,holdout=st.columns(3)
+        base.metric("Prior baseline PR-AUC",f"{report['baseline']['pr_auc']:.3f}")
+        threshold.metric("Chosen operating threshold",f"{model['decision_threshold']:.3f}")
+        holdout.metric("Selected model holdout PR-AUC",f"{report['metrics'][report['best_model']]['pr_auc']:.3f}")
+        st.caption("Low/Medium/High are relative bands from temporal out-of-fold probabilities, not absolute severity levels.")
+        trends=get("/api/analytics/trends"); trend=pd.DataFrame(trends["daily"])
+        st.subheader("Daily complaint activity in the labelled panel")
+        st.plotly_chart(px.line(trend,x="created_date",y="complaint_count",labels={"created_date":"Date","complaint_count":"Complaint count"}),use_container_width=True)
         importance=get("/api/explain"); imp=pd.DataFrame(importance["features"]); st.subheader("Permutation feature importance")
         st.plotly_chart(px.bar(imp.sort_values("importance_mean"),x="importance_mean",y="feature",orientation="h",error_x="importance_std"),use_container_width=True)
     except requests.RequestException as exc: st.info(f"Run the data and model pipeline to populate this view. ({exc})")
@@ -31,7 +40,7 @@ with tabs[1]:
     st.subheader("Latest cell-level recurrence risk")
     try:
         risks=get("/api/risks"); risk=pd.DataFrame(risks["cells"])
-        st.caption(f"Latest observed date: {risks['as_of']} · Recurrence probability is not defect severity.")
+        st.caption(f"Latest observed date: {risks['as_of']} · Risk bands are cohort-relative; recurrence probability is not defect severity.")
         if not risk.empty:
             fig=px.scatter_mapbox(risk,lat="latitude",lon="longitude",color="risk_level",size="risk_score",
               hover_data=["recurrence_probability","risk_score","cx","cy"],color_discrete_map={"High":"#d62728","Medium":"#ff7f0e","Low":"#2ca02c"},
