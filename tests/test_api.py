@@ -3,9 +3,10 @@ import pandas as pd
 import backend.main as api
 client=TestClient(api.app)
 
-def test_health():
+def test_health(caplog):
     response=client.get("/api/health")
     assert response.status_code==200 and response.json()["status"]=="ok"
+    assert any("request_complete" in record.message for record in caplog.records)
 
 def test_hotspot_endpoint_clusters_coordinates():
     points=[{"latitude":40.7,"longitude":-73.9},{"latitude":40.7001,"longitude":-73.9001},{"latitude":40.8,"longitude":-73.8}]
