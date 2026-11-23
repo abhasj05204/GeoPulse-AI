@@ -1,1 +1,4 @@
-"""GeoPulse AI geospatial machine-learning package."""
+"""GeoPulse AI package; load local environment variables before submodules."""
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parents[1]/".env")

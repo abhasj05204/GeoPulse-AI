@@ -2,12 +2,11 @@
 import json
 from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel,Field
-from geopulse.config import MODEL_PATH,ROOT
+from geopulse.config import MODEL_PATH,ARTIFACTS,DATA_PROCESSED
 from geopulse.models.inference import RecurrencePredictor
 from geopulse.spatial.hotspots import detect_hotspots
 from geopulse.genai.analyst import summarize
-
-app=FastAPI(title="GeoPulse AI API",version="0.4.1",description="Geospatial complaint recurrence analytics")
+app=FastAPI(title="GeoPulse AI API",version="0.4.2",description="Geospatial complaint recurrence analytics")
 class PredictionRequest(BaseModel): features:dict[str,float]=Field(...)
 class HotspotRequest(BaseModel): points:list[dict]=Field(...,min_length=2,max_length=10000); eps_m:float=500; min_samples:int=10
 class AnalystRequest(BaseModel): question:str=Field(...,min_length=1,max_length=1000); evidence:dict=Field(...)
@@ -20,28 +19,27 @@ def model_info():
     p=RecurrencePredictor(); return {"model_name":p.model_name,"features":p.features}
 @app.get("/api/performance")
 def performance():
-    path=ROOT/"artifacts"/"evaluation.json"
+    path=ARTIFACTS/"evaluation.json"
     if not path.exists(): raise HTTPException(503,"Evaluation report not found; train a model first")
     return json.loads(path.read_text(encoding="utf-8"))
 @app.get("/api/explain")
 def explain():
-    path=ROOT/"artifacts"/"feature_importance.json"
+    path=ARTIFACTS/"feature_importance.json"
     if not path.exists(): raise HTTPException(503,"Feature importance report not found; train a model first")
     return json.loads(path.read_text(encoding="utf-8"))
 @app.get("/api/analytics/summary")
 def analytics_summary():
     import pandas as pd
-    path=ROOT/"data"/"processed"/"cell_day_panel.csv"
+    path=DATA_PROCESSED/"cell_day_panel.csv"
     if not path.exists(): raise HTTPException(503,"Processed panel not found; run the training pipeline first")
     df=pd.read_csv(path)
     return {"panel_rows":len(df),"spatial_cells":int(df[["cx","cy"]].drop_duplicates().shape[0]),
-      "date_start":str(df.created_date.min()),"date_end":str(df.created_date.max()),
-      "complaint_events":int(df["count"].sum())}
+      "date_start":str(df.created_date.min()),"date_end":str(df.created_date.max()),"complaint_events":int(df["count"].sum())}
 @app.get("/api/risks")
 def latest_risks():
     import pandas as pd
     from pyproj import Transformer
-    path=ROOT/"data"/"processed"/"cell_day_panel.csv"
+    path=DATA_PROCESSED/"cell_day_panel.csv"
     if not path.exists(): raise HTTPException(503,"Processed panel not found; run the training pipeline first")
     if not MODEL_PATH.exists(): raise HTTPException(503,"Trained model artifact not found")
     df=pd.read_csv(path); df["created_date"]=pd.to_datetime(df.created_date)
@@ -74,8 +72,7 @@ def ai_summary(payload:AnalystRequest):
 @app.post("/api/ai/ask")
 def ai_ask(payload:AnalystQuestionRequest):
     try:
-        risk_data=latest_risks(); risks=risk_data["cells"]
-        report=performance(); importance=explain()
+        risk_data=latest_risks(); risks=risk_data["cells"]; report=performance(); importance=explain()
         counts={level:sum(1 for row in risks if row["risk_level"]==level) for level in ("High","Medium","Low")}
         top=sorted(risks,key=lambda row:row["recurrence_probability"],reverse=True)[:10]
         evidence={"as_of":risk_data["as_of"],"cell_count":len(risks),"risk_band_counts":counts,

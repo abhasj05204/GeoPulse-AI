@@ -1,9 +1,11 @@
 """Streamlit analytical dashboard consuming GeoPulse API results."""
 import os,json
+from dotenv import load_dotenv
 import requests
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+load_dotenv()
 st.set_page_config(page_title="GeoPulse AI",page_icon="🗺️",layout="wide")
 st.title("GeoPulse AI"); st.caption("Predict. Prioritize. Prevent. · Geospatial complaint recurrence intelligence")
 api=os.getenv("GEOPULSE_API_URL","http://127.0.0.1:8000").rstrip("/")
