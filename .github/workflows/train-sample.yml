@@ -1,7 +1,7 @@
 name: Real-data model smoke run
 on:
   push:
-    branches: [feature/data-sampling]
+    branches: [feature/model-selection]
   workflow_dispatch:
 jobs:
   train:
@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 30
     env:
       PYTHONUNBUFFERED: "1"
-      GEOPULSE_INFRA_TYPES: Street Condition,Street Light Condition,Sidewalk Condition,Sewer,Water System,Highway Condition
+      GEOPULSE_INFRA_TYPES: Street Condition,Street Light Condition,Sidewalk Condition,Sewer,Water System,Highway Condition,Traffic Signal Condition,Water Leak
       SOCRATA_APP_TOKEN: ${{ secrets.SOCRATA_APP_TOKEN }}
     steps:
       - uses: actions/checkout@v4

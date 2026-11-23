@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 REQUIRED={"created_date","complaint_type","latitude","longitude"}
-DEFAULT_INFRA_TYPES=["Street Condition","Street Light Condition","Sidewalk Condition","Sewer","Water System","Highway Condition"]
+DEFAULT_INFRA_TYPES=["Street Condition","Street Light Condition","Sidewalk Condition","Sewer","Water System","Highway Condition","Traffic Signal Condition","Water Leak"]
 
 def download_nyc311(output:str|Path,start:date,end:date,limit:int=100000)->Path:
     """Download a bounded sample spread across months and early/middle/late time slices."""
@@ -19,25 +19,20 @@ def download_nyc311(output:str|Path,start:date,end:date,limit:int=100000)->Path:
     rows=[]
     for month,budget in zip(months,budgets):
         if budget==0: continue
-        month_start=max(start,month.date())
-        month_end=min(end,(month+pd.offsets.MonthBegin(1)).date())
+        month_start=max(start,month.date()); month_end=min(end,(month+pd.offsets.MonthBegin(1)).date())
         if month_start>=month_end: continue
-        begin=pd.Timestamp(month_start); finish=pd.Timestamp(month_end)
-        samples=min(3,budget); duration=finish-begin
+        begin=pd.Timestamp(month_start); finish=pd.Timestamp(month_end); samples=min(3,budget); duration=finish-begin
         for i in range(samples):
             chunk=budget//samples+(1 if i<budget%samples else 0)
             seg_start=begin+duration*i/samples; seg_end=begin+duration*(i+1)/samples
-            start_text=seg_start.strftime("%Y-%m-%dT%H:%M:%S")
-            end_text=seg_end.strftime("%Y-%m-%dT%H:%M:%S")
+            start_text=seg_start.strftime("%Y-%m-%dT%H:%M:%S"); end_text=seg_end.strftime("%Y-%m-%dT%H:%M:%S")
             where=f"created_date >= '{start_text}' AND created_date < '{end_text}' AND latitude IS NOT NULL AND longitude IS NOT NULL"
             response=requests.get(f"{base}/resource/{dataset}.json",headers=headers,timeout=60,
-              params={"$select":"unique_key,created_date,complaint_type,latitude,longitude",
-                "$where":where,"$limit":chunk,"$order":"created_date ASC"})
+              params={"$select":"unique_key,created_date,complaint_type,latitude,longitude","$where":where,"$limit":chunk,"$order":"created_date ASC"})
             response.raise_for_status(); rows.extend(response.json())
     frame=pd.DataFrame(rows)
     if "unique_key" in frame: frame=frame.drop_duplicates("unique_key")
-    frame=frame.head(limit)
-    path=Path(output); path.parent.mkdir(parents=True,exist_ok=True)
+    frame=frame.head(limit); path=Path(output); path.parent.mkdir(parents=True,exist_ok=True)
     frame.to_csv(path,index=False); return path
 
 def validate_complaints(frame:pd.DataFrame)->pd.DataFrame:
