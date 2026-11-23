@@ -7,6 +7,7 @@ import streamlit as st
 st.set_page_config(page_title="GeoPulse AI",page_icon="🗺️",layout="wide")
 st.title("GeoPulse AI"); st.caption("Predict. Prioritize. Prevent. · Geospatial complaint recurrence intelligence")
 api=os.getenv("GEOPULSE_API_URL","http://127.0.0.1:8000").rstrip("/")
+if "://" not in api: api=f"http://{api}"
 def get(path):
     r=requests.get(f"{api}{path}",timeout=20); r.raise_for_status(); return r.json()
 try:
@@ -61,9 +62,12 @@ with tabs[3]:
             st.metric("30-day recurrence probability",f"{out['recurrence_probability']:.1%}"); st.metric("Risk band",out["risk_level"]); st.json(out)
         except requests.RequestException as exc: st.error(str(exc))
 with tabs[4]:
-    st.subheader("Evidence-grounded AI analyst"); question=st.text_input("Ask about a model or spatial result")
-    evidence=st.text_area("Analytical evidence (JSON)",value='{"note":"Paste API evaluation, hotspot, or prediction output here."}',height=150)
-    if st.button("Generate evidence-based summary"):
-        try:
-            r=requests.post(f"{api}/api/ai/summary",json={"question":question,"evidence":json.loads(evidence)},timeout=60); r.raise_for_status(); st.write(r.json()["summary"])
-        except (ValueError,requests.RequestException) as exc: st.error(f"Could not generate summary: {exc}")
+    st.subheader("GeoPulse AI analyst"); question=st.text_input("Ask about current risk zones, trends, or model performance")
+    if st.button("Ask GeoPulse"):
+        if not question.strip(): st.warning("Enter a question first.")
+        else:
+            try:
+                r=requests.post(f"{api}/api/ai/ask",json={"question":question},timeout=60); r.raise_for_status()
+                answer=r.json(); st.write(answer["summary"])
+                with st.expander("View evidence supplied to the model"): st.json(answer["evidence_used"])
+            except requests.RequestException as exc: st.error(f"AI analyst unavailable: {exc}")
